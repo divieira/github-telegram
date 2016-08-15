@@ -124,8 +124,9 @@ exports.handler = (e, context, callback) => {
     // Add preamble
     appendToMessage(callback, 0,
         `*${e.pusher.name}* has pushed ` +
-        `*${e.commits.length} ${e.commits.length == 1 ? 'commit' : 'commits'}* ` +
-        `to [${e.repository.name}](${e.repository.url},):`,
+        `[${e.commits.length} ${e.commits.length == 1 ? 'commit' : 'commits'}](${e.compare}) ` +
+        `to [${e.repository.name}](${e.repository.url}) ` +
+        `on [${e.ref.slice(11)}](${e.repository.url}/commits/${e.ref.slice(11)}):`,
         callback
     );
 
