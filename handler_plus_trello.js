@@ -110,6 +110,14 @@ function appendToMessage(callback, index, line)
     }
 }
 
+function escapeMarkdown(text)
+{
+    // Escape special Markdown formatting characters, so we don't receive a
+    // "Bad Request: Can't parse message text: Can't find end of the entity "
+    // "starting at byte offset ___" error.
+    // See https://core.telegram.org/bots/api#markdown-style for characters.
+    return text.replace(/[\*_\[\]\(\)`]/g, '\\$&');
+}
 
 // AWS Lambda handler entry point
 exports.handler = (e, context, callback) => {
@@ -123,9 +131,9 @@ exports.handler = (e, context, callback) => {
 
     // Add preamble
     appendToMessage(callback, 0,
-        `*${e.pusher.name}* has pushed ` +
+        `*${escapeMarkdown(e.pusher.name)}* has pushed ` +
         `[${e.commits.length} ${e.commits.length == 1 ? 'commit' : 'commits'}](${e.compare}) ` +
-        `to [${e.repository.name}](${e.repository.url}) ` +
+        `to [${escapeMarkdown(e.repository.name)}](${e.repository.url}) ` +
         `on [${e.ref.slice(11)}](${e.repository.url}/commits/${e.ref.slice(11)}):`,
         callback
     );
@@ -142,7 +150,8 @@ exports.handler = (e, context, callback) => {
         getTrelloCard(card_id && card_id[1], function (card) {
                 // Format commit line with the card info, if found
                 appendToMessage(callback, i+1,
-                    `• [${c.id.slice(0,6)}](${c.url}) ${c.message.split('\n')[0]}${card !== null ? ` ([${card.name}](${card.url}))` : '' }`
+                    `• [${c.id.slice(0,6)}](${c.url}) ${escapeMarkdown(c.message.split('\n')[0])}` +
+                    `${card !== null ? ` ([${escapeMarkdown(card.name)}](${card.url}))` : '' }`
                 );
             }, callback
         );
