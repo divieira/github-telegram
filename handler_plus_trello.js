@@ -91,25 +91,6 @@ function getTrelloCard(card_id, onsuccess, onerror) {
 }
 
 
-// Accumulate message lines in an array and send when we receive `_count` lines
-// FIXME: Replace `_count` and `_lines` globals with a "deferred"-style object
-var _count;
-var _lines = [];
-function appendToMessage(callback, index, line)
-{
-    // Set the indexed line in the global array
-    _lines[index] = line;
-
-    // Check if all expected lines have been appended
-    _count--;
-    if (_count === 0)
-    {
-        // Concatenate lines and send the Telegram message
-        let text = _lines.join('\n');
-        sendMessage(callback, text);
-    }
-}
-
 function escapeMarkdown(text)
 {
     // Escape special Markdown formatting characters, so we don't receive a
@@ -119,6 +100,7 @@ function escapeMarkdown(text)
     return text.replace(/[\*_\[\]\(\)`]/g, '\\$&');
 }
 
+
 // AWS Lambda handler entry point
 exports.handler = (e, context, callback) => {
     // Receive Github pull event payload, parse commit messages to find Trello
@@ -126,17 +108,15 @@ exports.handler = (e, context, callback) => {
 
     // Since we process Trello API requests asynchronously, accumulate message
     // lines until we have parsed them all
-    // FIXME: Replace `_count` global with a "deferred"-style object
-    _count = e.commits.length + 1;
+    let promises = [];
 
     // Add preamble
-    appendToMessage(callback, 0,
+    promises[0] =
         `*${escapeMarkdown(e.pusher.name)}* has pushed ` +
         `[${e.commits.length} ${e.commits.length == 1 ? 'commit' : 'commits'}](${e.compare}) ` +
         `to [${escapeMarkdown(e.repository.name)}](${e.repository.url}) ` +
-        `on [${e.ref.slice(11)}](${e.repository.url}/commits/${e.ref.slice(11)}):`,
-        callback
-    );
+        `on [${e.ref.slice(11)}](${e.repository.url}/commits/${e.ref.slice(11)}):`;
+
 
     // Helper function to parse commit message commit
     function processCommit(i, c)
@@ -147,18 +127,25 @@ exports.handler = (e, context, callback) => {
         console.log(card_id);
 
         // Obtain the Trello card info asynchronously and append line to message
-        getTrelloCard(card_id && card_id[1], function (card) {
+        return new Promise(function(resolve, reject) {
+            getTrelloCard(card_id && card_id[1], function (card) {
                 // Format commit line with the card info, if found
-                appendToMessage(callback, i+1,
-                    `• [${c.id.slice(0,6)}](${c.url}) ${escapeMarkdown(c.message.split('\n')[0])}` +
-                    `${card !== null ? ` ([${escapeMarkdown(card.name)}](${card.url}))` : '' }`
-                );
-            }, callback
-        );
+                resolve(`• [${c.id.slice(0,6)}](${c.url}) ${escapeMarkdown(c.message.split('\n')[0])}` +
+                        `${card !== null ? ` ([${escapeMarkdown(card.name)}](${card.url}))` : '' }`);
+            }, callback);
+        });
     }
 
     // Iterate through each commit in the Github push event payload
-    for (let i = 0; i < e.commits.length; i++) {
-        processCommit(i, e.commits[i]);
+    for (let i = 0; i < e.commits.length; i++)
+    {
+        promises[i+1] = processCommit(i, e.commits[i]);
     }
+
+    // Wait on all promises to complete
+    Promise.all(promises).then(function(values) {
+        // Concatenate all message lines and send the message
+        let text = values.join('\n');
+        sendMessage(callback, text);
+    });
 };
