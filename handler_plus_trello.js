@@ -97,7 +97,7 @@ function escapeMarkdown(text)
     // "Bad Request: Can't parse message text: Can't find end of the entity "
     // "starting at byte offset ___" error.
     // See https://core.telegram.org/bots/api#markdown-style for characters.
-    return text.replace(/[\*_\[\]\(\)`]/g, '\\$&');
+    return text.replace(/[\*_\[`]/g, '\\$&');
 }
 
 
